@@ -1,0 +1,52 @@
+# Configurations for the environment and agent setup
+
+environment:
+  name: "l2rpn_case14_sandbox"      # Environment name for Gym2Op
+  backend: "LightSimBackend"        # Backend for Grid2Op environment
+  max_sub_changed: 4                # Maximum substations that can be reconfigured
+  max_line_status_changed: 4        # Maximum powerlines that can change status
+  n_envs: 4                         # Number of parallel environments for training
+  use_flattened_action_wrapper: true # Use flattened action wrapper
+
+agent:
+  base_agent:
+    learning_rate: 0.0007           # Learning rate for base agent (A2C)
+    gamma: 0.99                     # Discount factor for base agent
+    n_steps: 5                      # Number of steps per environment per update
+    gae_lambda: 0.95                # Generalized advantage estimation parameter
+    ent_coef: 0.01                  # Entropy coefficient
+    vf_coef: 0.5                    # Value function coefficient
+    max_grad_norm: 0.5              # Max gradient norm
+    use_rms_prop: true              # Use RMSProp optimizer
+    device: "cuda"                  # Use "cuda" if GPU is available, otherwise "cpu"
+    seed: 42                        # Random seed for reproducibility
+  improved_agent1:                  # Specific configurations for ImprovedAgent1
+    observation_processing:
+      normalize: true               # Apply normalization to observations
+  improved_agent2:                  # Specific configurations for ImprovedAgent2
+    action_modification:
+      clip_actions: true            # Clip actions to action space bounds
+  improved_agent3:                  # Specific configurations for ImprovedAgent3
+    reward_shaping:
+      amplify_positive: 1.5         # Amplify factor for positive rewards
+      reduce_negative: 0.5          # Reduction factor for negative rewards
+
+training:
+  total_timesteps: 100000           # Total training timesteps
+  eval_episodes: 100                 # Number of episodes for evaluating each agent
+  agents_to_evaluate:               # List of agents to evaluate
+    - BaseAgent
+    - ImprovedAgent1
+    - ImprovedAgent2
+    - ImprovedAgent3
+    - ImprovedAgent4
+
+evaluation:
+  num_episodes: 100                  # Number of episodes to run for evaluation
+  save_model: true                  # Save the trained model after training
+  model_save_path: "models"         # Directory to save trained models
+  plot_save_path: "results"         # Directory to save evaluation plots
+
+logging:
+  use_wandb: true
+  project_name: "my_project_name"
