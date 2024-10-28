@@ -6,6 +6,7 @@ import grid2op
 from grid2op import gym_compat
 from grid2op.Parameters import Parameters
 from grid2op.Action import PlayableAction
+#from grid2op.Action.FlattenAction import FlattenedActionWrapper 
 from grid2op.Observation import CompleteObservation
 from grid2op.Reward import L2RPNReward, N1Reward, CombinedScaledReward
 from lightsim2grid import LightSimBackend
@@ -48,7 +49,7 @@ class Gym2OpEnv(gym.Env):
 
         # Apply FlattenedActionWrapper if specified in config
         if config["environment"].get("use_flattened_action_wrapper", False):
-            from FlattenedActionWrapper import FlattenedActionWrapper
+            from grid2op.Action.FlattenAction import FlattenedActionWrapper
             self._gym_env = FlattenedActionWrapper(gym_compat.GymEnv(self._g2op_env))
         else:
             self._gym_env = gym_compat.GymEnv(self._g2op_env)
