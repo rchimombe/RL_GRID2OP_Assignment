@@ -1,6 +1,9 @@
 # RL_GRID2OP_Assignment
 Suggested Directory Structure for traing a DDPG
 The proposed directory structure organizes each custom environment and agent in a modular way:
+
+
+
 RL_GRID2OP_Assignment/
 │
 ├── DDPG_train.py                     # Main script for selecting and training the environment
