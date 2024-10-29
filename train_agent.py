@@ -1,66 +1,81 @@
 # train_agent.py
 
-import yaml
+import gymnasium as gym
 from stable_baselines3 import A2C
 from stable_baselines3.common.env_util import make_vec_env
 import torch
+import numpy as np
 import matplotlib.pyplot as plt
+from gym2op_env import Gym2OpEnv  # Import your environment
+from base_agent import BaseAgent  # Import the BaseAgent class
 
-def load_config(config_path="config.yaml"):
-    """Load configuration settings from config.yaml."""
-    with open(config_path, "r") as file:
-        config = yaml.safe_load(file)
-    return config
+class FlattenedActionWrapper(gym.ActionWrapper):
+    def __init__(self, env):
+        super(FlattenedActionWrapper, self).__init__(env)
+        # Flatten only the action space
+        self.action_space = gym.spaces.flatten_space(env.action_space)
+        # The observation space remains as defined in Gym2OpEnv
+        self.observation_space = env.observation_space
 
-def train_agent(agent_instance, config):
-    """Train the agent using the A2C model with parameters from config."""
-    vec_env = make_vec_env(lambda: agent_instance.env, n_envs=config["environment"]["n_envs"])
+    def action(self, action):
+        # Unflatten the action back into the original Dict action space
+        action_unflattened = gym.spaces.unflatten(self.env.action_space, action)
+        return action_unflattened
+
+# Function to create a new environment instance for each parallel worker
+def make_env():
+    def _init():
+        env = Gym2OpEnv()
+        env = FlattenedActionWrapper(env)  # Wrap the environment with the FlattenedActionWrapper
+        return env
+    return _init
+
+def train_a2c_agent():
+    # Create a vectorized environment for parallel processing to improve training efficiency
+    vec_env = make_vec_env(make_env(), n_envs=4)  # Creates 4 parallel environments
+
+    # Initialize A2C agent with policy and optimizer settings
     model = A2C(
-        "MlpPolicy",
+        "MultiInputPolicy",
         vec_env,
         verbose=1,
-        learning_rate=config["agent"]["learning_rate"],
-        gamma=config["agent"]["gamma"],
-        n_steps=config["agent"]["n_steps"],
-        gae_lambda=config["agent"]["gae_lambda"],
-        ent_coef=config["agent"]["ent_coef"],
-        vf_coef=config["agent"]["vf_coef"],
-        max_grad_norm=config["agent"]["max_grad_norm"],
-        use_rms_prop=config["agent"]["use_rms_prop"],
-        seed=config["agent"]["seed"],
+        learning_rate=0.01,
+        gamma=0.99,  # Discount factor for long-term rewards
+        n_steps=5,  # Number of steps to run for each environment per update
+        gae_lambda=0.95,  # GAE lambda parameter
+        ent_coef=0.01,  # Entropy coefficient for exploration
+        vf_coef=0.5,  # Value function coefficient
+        max_grad_norm=0.5,  # Gradient clipping
+        use_rms_prop=True,
+        seed=42,
         device="cuda" if torch.cuda.is_available() else "cpu"
     )
 
     # Train the model
-    print(f"Training model with {agent_instance.__class__.__name__}...")
-    model.learn(total_timesteps=config["training"]["total_timesteps"])
+    print("Training A2C model...")
+    model.learn(total_timesteps=100000)  # Adjust total timesteps as needed
 
-    # Save the trained model if specified
-    if config["evaluation"]["save_model"]:
-        model_save_path = f"{config['evaluation']['model_save_path']}/{agent_instance.__class__.__name__.lower()}"
-        model.save(model_save_path)
-        print(f"Model saved as '{model_save_path}'.")
+    # Save the model for future use
+    model.save("a2c_grid2op_baseline")
+    print("Model saved as 'a2c_grid2op_baseline'.")
 
-    return model
+    # Evaluate the trained agent
+    base_agent = BaseAgent(vec_env)  # Initialize BaseAgent with the environment
+    evaluate_agent_performance(base_agent, model)
 
-def evaluate_agent(agent_instance, model, config):
-    """Evaluate the agent and plot rewards."""
-    num_episodes = config["evaluation"]["num_episodes"]
-    episode_rewards = agent_instance.evaluate(model, num_episodes)
+def evaluate_agent_performance(agent, model, num_episodes=100):
+    # Evaluate agent performance and plot rewards
+    env = FlattenedActionWrapper(Gym2OpEnv())  # Create an instance of the environment for evaluation
+    episode_rewards = agent.evaluate(model, env, num_episodes)
 
-    # Plot the episode rewards
+    # Plot the episode rewards with a smooth line and no marker
     plt.figure(figsize=(10, 5))
-    plt.plot(range(1, num_episodes + 1), episode_rewards, marker='o', label=agent_instance.__class__.__name__)
+    plt.plot(range(1, num_episodes + 1), episode_rewards)
     plt.title('Agent Performance Over Episodes')
     plt.xlabel('Episode')
     plt.ylabel('Total Reward')
-    plt.legend()
     plt.grid(True)
-
-    # Save the plot if specified
-    if config["evaluation"].get("plot_save_path"):
-        plot_save_path = f"{config['evaluation']['plot_save_path']}/performance_{agent_instance.__class__.__name__.lower()}.png"
-        plt.savefig(plot_save_path)
-        print(f"Plot saved as '{plot_save_path}'.")
-
     plt.show()
+
+if __name__ == "__main__":
+    train_a2c_agent()

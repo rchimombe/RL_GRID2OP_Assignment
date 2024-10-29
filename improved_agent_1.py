@@ -1,53 +1,52 @@
 # improved_agent_1.py
 
-import train_agent
-import yaml
-from gym2op_env import Gym2OpEnv
-from base_agent import BaseAgent
 import numpy as np
 
-
-class ImprovedAgent1(BaseAgent):
-    def __init__(self, env, config_path="config.yaml"):
-        super().__init__(env)
-        self.config = self.load_config(config_path)  # Load configuration settings
-
-    def load_config(self, config_path):
-        """Load configuration settings from config.yaml for ImprovedAgent1."""
-        with open(config_path, "r") as file:
-            config = yaml.safe_load(file)
-        return config
-
-    def train(self):
-        """Call train_agent to train this agent using its own environment and config."""
-        train_agent.train_agent(self, self.config)
-
-    def evaluate(self, model, num_episodes=5):
-        """Evaluate the agent over a set number of episodes."""
-        return super().evaluate(model, num_episodes)
+class ImprovedAgent1:
+    def __init__(self, env):
+        self.env = env
+        # Additional initialization if necessary
 
     def preprocess_observation(self, observation):
-        """Custom observation processing specific to ImprovedAgent1."""
-        # Normalize critical features like line loadings, generator outputs, and load demands
-        line_loadings = observation["line_loadings"]
-        generator_outputs = observation["generator_outputs"]
-        load_demands = observation["load_demands"]
-        
-        # Normalize each observation feature by dividing by the maximum observed value
-        normalized_line_loadings = line_loadings / max(line_loadings) if max(line_loadings) > 0 else line_loadings
-        normalized_generator_outputs = generator_outputs / max(generator_outputs) if max(generator_outputs) > 0 else generator_outputs
-        normalized_load_demands = load_demands / max(load_demands) if max(load_demands) > 0 else load_demands
-        
-        # Return the processed observation with normalized values
-        return {
-            "line_loadings": normalized_line_loadings,
-            "generator_outputs": normalized_generator_outputs,
-            "load_demands": normalized_load_demands,
-            "topology": observation["topology"]  # Pass topology unchanged
-        }
+        # Extract features from observation
+        # Assuming observation is a dictionary with keys
+        rho = observation.get('rho', np.zeros((4,)))
+        prod_p = observation.get('prod_p', np.zeros((10,)))
+        load_p = observation.get('load_p', np.zeros((5,)))
+        topo_vect = observation.get('topo_vect', np.zeros((15,)))
 
+        # Flatten all arrays to 1D
+        rho_flat = rho.flatten()
+        prod_p_flat = prod_p.flatten()
+        load_p_flat = load_p.flatten()
+        topo_vect_flat = topo_vect.flatten()
 
-if __name__ == "__main__":
-    env = Gym2OpEnv(config_path="config.yaml")
-    agent = ImprovedAgent1(env)
-    agent.train()  # This will call train_agent with ImprovedAgent1's configuration
+        # Concatenate the flattened arrays
+        critical_features = np.concatenate([rho_flat, prod_p_flat, load_p_flat, topo_vect_flat])
+
+        # Normalize the features
+        normalized_features = (critical_features - np.mean(critical_features)) / (np.std(critical_features) + 1e-8)
+
+        return normalized_features.astype(np.float32)
+
+    def evaluate(self, model, num_episodes=5):
+        """
+        Evaluate the agent using preprocessed observations.
+        """
+        episode_rewards = []
+
+        for ep in range(num_episodes):
+            obs = self.env.reset()
+            done = False
+            episode_reward = 0
+
+            while not done:
+                # Model predicts action based on preprocessed observation
+                action, _states = model.predict(obs, deterministic=True)
+                obs, reward, terminated, truncated, info = self.env.step(action)
+                done = terminated or truncated
+                episode_reward += reward
+
+            episode_rewards.append(episode_reward)
+
+        return episode_rewards

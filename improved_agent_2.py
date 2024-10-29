@@ -1,69 +1,84 @@
 # improved_agent_2.py
 
-import train_agent
-import yaml
-from gym2op_env import Gym2OpEnv
 from base_agent import BaseAgent
 import numpy as np
 
-
 class ImprovedAgent2(BaseAgent):
-    def __init__(self, env, config_path="config.yaml"):
+    def __init__(self, env):
         super().__init__(env)
-        self.config = self.load_config(config_path)  # Load configuration settings
+        self.setup_actions()  # Set up restricted action space during initialization
 
-    def load_config(self, config_path):
-        """Load configuration settings from config.yaml for ImprovedAgent2."""
-        with open(config_path, "r") as file:
-            config = yaml.safe_load(file)
-        return config
+    def setup_actions(self):
+        print("Setting up restricted action space...")
+
+        # Sampled action space as a workaround
+        restricted_actions = []
+        critical_substations = [2, 4, 7]
+        critical_lines = [3, 8, 12]
+        load_threshold = 0.8
+        high_risk_penalty_actions = []
+
+        def is_high_risk(action):
+            return (
+                (action.substation_id in critical_substations and action.is_disconnect_substation())
+                or (action.line_id in critical_lines and action.is_disconnect_line())
+            )
+
+        for _ in range(100):  # Adjust sample size as needed
+            action = self.env.action_space.sample()  # Get a random action
+            # Use only actions that meet specific conditions
+            if hasattr(action, 'substation_id') and hasattr(action, 'line_id'):
+                if action.substation_id in critical_substations or action.line_id in critical_lines:
+                    current_load = self.env.get_obs().rho[action.line_id]
+                    if current_load >= load_threshold:
+                        if is_high_risk(action):
+                            high_risk_penalty_actions.append(action)
+                        else:
+                            restricted_actions.append(action)
+
+        self.action_space = restricted_actions if restricted_actions else [self.env.action_space.sample()]
+        print(f"Restricted action space size: {len(self.action_space)}")
+
+    def modify_action(self, action):
+        """
+        Example action modification logic. Adjusts actions to fit within the restricted action space.
+        """
+        action_modified = np.clip(action, self.env.action_space.low, self.env.action_space.high)
+        return action_modified
 
     def train(self):
-        """Call train_agent to train this agent using its own environment and config."""
-        train_agent.train_agent(self, self.config)
+        """
+        Training logic that interacts with the restricted action space.
+        """
+        obs, info = self.env.reset()
+        done = False
 
-    def evaluate(self, model, num_episodes=5):
-        """Evaluate the agent over a set number of episodes."""
-        return super().evaluate(model, num_episodes)
+        while not done:
+            # Sample an action from the restricted action space
+            action = self.env.action_space.sample()  # Placeholder for actual action selection
+            modified_action = self.modify_action(action)  # Modify the action
+            obs, reward, terminated, truncated, info = self.env.step(modified_action)
+            done = terminated or truncated
 
-    def get_restricted_actions(self, obs):
-        """Define custom action restrictions based on critical substations, lines, and load."""
-        restricted_actions = []
-        
-        # Load parameters from config
-        load_threshold = self.config["action_restriction"]["load_threshold"]
-        critical_substations = self.config["action_restriction"]["critical_substations"]
-        critical_lines = self.config["action_restriction"]["critical_lines"]
+            # Logic that could use modified actions in training
+            print(f"Modified Action: {modified_action}, Reward: {reward}")
 
-        for action in self.env.action_space:
-            # Only allow actions on critical substations/lines and if load exceeds threshold
-            if action.substation_id in critical_substations or action.line_id in critical_lines:
-                current_load = obs["line_loadings"][action.line_id]
-                if current_load >= load_threshold and not self.is_high_risk_action(action):
-                    restricted_actions.append(action)
+def evaluate(self, model, env, num_episodes=5):
+    episode_rewards = []
 
-        return restricted_actions if restricted_actions else self.env.action_space
+    for ep in range(num_episodes):
+        obs, info = env.reset()  # Ensure `env` is correctly passed here
+        done = False
+        episode_reward = 0
 
-    def is_high_risk_action(self, action):
-        """Identify high-risk actions based on critical substations and lines."""
-        critical_substations = self.config["action_restriction"]["critical_substations"]
-        critical_lines = self.config["action_restriction"]["critical_lines"]
+        while not done:
+            action, _states = model.predict(obs, deterministic=True)
+            obs, reward, terminated, truncated, info = env.step(action)
+            done = terminated or truncated
+            episode_reward += reward
 
-        # Determine if the action disconnects a critical substation or line
-        return (
-            (action.substation_id in critical_substations and action.is_disconnect_substation()) or
-            (action.line_id in critical_lines and action.is_disconnect_line())
-        )
+        episode_rewards.append(episode_reward)
 
-    def choose_action(self, obs):
-        """Choose an action from the restricted action space based on the current observation."""
-        restricted_actions = self.get_restricted_actions(obs)
-        # Randomly select an action from the restricted set for simplicity
-        action = np.random.choice(restricted_actions)
-        return action
+    return episode_rewards
 
-if __name__ == "__main__":
-    env = Gym2OpEnv(config_path="config.yaml")
-    agent = ImprovedAgent2(env)
-    agent.train()  # This will call train_agent with ImprovedAgent2's configuration
 
