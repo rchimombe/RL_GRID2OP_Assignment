@@ -6,7 +6,7 @@ import DDPG_gym2op_baseline as baseline_env
 import DDPG_gym2op_improved_1 as improved_env_1
 import DDPG_gym2op_improved_2 as improved_env_2
 import DDPG_gym2op_improved_3 as improved_env_3
-from utils import process_observation, plot_training_progress, save_model, load_model
+from DDGPGcode.utils import process_observation, plot_training_progress, save_model, load_model
 from DDPG_gym2op_env import FlattenComplexActionSpace
 
 
