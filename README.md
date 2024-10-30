@@ -28,7 +28,7 @@
 2. **Train the DDPG agent**:
     python DDPG_train.py
 
-## Directory Structure for Training a DDPG
+## Directory Structure for Training a A2C
 
 ### Files Description
 - **A2Ccode**: Advantage Actor-Critic (A2C) Implementation Code.
